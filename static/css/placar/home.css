@@ -1,0 +1,14 @@
+.carousel-item {
+  height: 100%;
+}
+
+.slide-container {
+  min-height: 500px;
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .slide-container {
+    min-height: 650px;
+  }
+}
