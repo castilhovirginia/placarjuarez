@@ -237,9 +237,81 @@ class DancaForm(forms.ModelForm):
             ),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)  #
+
+        campeonato = None
+
+        # 🔹 edição
+        if self.instance.pk:
+            campeonato = self.instance.campeonato
+
+        # 🔹 criação (quando o usuário já escolheu o campeonato)
+        elif 'campeonato' in self.data:
+            try:
+                campeonato_id = int(self.data.get('campeonato'))
+                campeonato = Campeonato.objects.get(pk=campeonato_id)
+            except (ValueError, Campeonato.DoesNotExist):
+                campeonato = None
+
+        # 🔹 filtrar equipes pelo ano do campeonato
+        if campeonato:
+            self.fields['equipe'].queryset = Equipe.objects.filter(
+                ano=campeonato.ano
+            )
+        else:
+            # enquanto não houver campeonato definido, não mostra ninguém
+            self.fields['equipe'].queryset = Equipe.objects.none()
+
+        # 🔒 Remover botões FK (como você já tinha)
+        fk_fields = [
+            'equipe',
+            'campeonato',
+        ]
+
+        for field_name in fk_fields:
+            field = self.fields.get(field_name)
+            if isinstance(field, forms.ModelChoiceField):
+                field.widget.can_add_related = False
+                field.widget.can_change_related = False
+                field.widget.can_delete_related = False
+                field.widget.can_view_related = False
+
 @admin.register(Danca)
 class DancaAdmin(admin.ModelAdmin):
     form = DancaForm
+
+    class Media:
+        js = ("admin/js/danca.js",)
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "equipes-por-campeonato/",
+                self.admin_site.admin_view(self.equipes_por_campeonato),
+                name="partida_equipes_por_campeonato",
+            ),
+        ]
+        return custom_urls + urls
+
+    def equipes_por_campeonato(self, request):
+        campeonato_id = request.GET.get("campeonato_id")
+        equipes = []
+
+        if campeonato_id:
+            try:
+                campeonato = Campeonato.objects.get(pk=campeonato_id)
+                equipes = Equipe.objects.filter(ano=campeonato.ano)
+            except Campeonato.DoesNotExist:
+                pass
+
+        data = [
+            {"id": equipe.id, "text": str(equipe)}
+            for equipe in equipes
+        ]
+
+        return JsonResponse(data, safe=False)
 
     list_display = (
         'equipe',

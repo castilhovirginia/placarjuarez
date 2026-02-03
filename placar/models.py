@@ -238,6 +238,8 @@ class Danca(models.Model):
         (12, '12º Lugar'),
     ]
 
+    campeonato = models.ForeignKey(Campeonato, related_name='dancas', on_delete=models.CASCADE)
+
     equipe = models.ForeignKey(
         'Equipe',
         on_delete=models.CASCADE,
