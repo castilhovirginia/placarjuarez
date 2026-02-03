@@ -1,0 +1,9 @@
+{% load i18n admin_urls %}
+
+<div class="submit-row">
+    <input type="submit" value="{% trans 'Save' %}" class="default" name="_save">
+
+    <a href="{% url opts|admin_urlname:'changelist' %}" class="button cancel-link">
+        {% trans 'Cancel' %}
+    </a>
+</div>
