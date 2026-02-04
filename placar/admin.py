@@ -381,12 +381,6 @@ class ExtraForm(forms.ModelForm):
                 field.widget.can_delete_related = False
                 field.widget.can_view_related = False
 
-    def clean_pontos(self):
-        pontos = self.cleaned_data.get('pontos')
-        if pontos < 0:
-            raise forms.ValidationError('A pontuação não pode ser negativa.')
-        return pontos
-
 @admin.register(Extra)
 class ExtraAdmin(admin.ModelAdmin):
     form = ExtraForm

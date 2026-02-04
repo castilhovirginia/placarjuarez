@@ -85,9 +85,9 @@ def ranking_geral(request, campeonato_id):
 
     for extra in extras:
         if extra.ocorrencia == 1:  # Doação
-            ranking[extra.equipe] += extra.pontos
+            ranking[extra.equipe] += extra.pontos  # Soma os pontos das doações
         elif extra.ocorrencia == 2:  # Penalidade
-            ranking[extra.equipe] -= extra.pontos
+            ranking[extra.equipe] += extra.pontos  # Soma o valor negativo das penalidades (já é negativo)
 
     # 🔹 Ordenação
     ranking_ordenado = sorted(
