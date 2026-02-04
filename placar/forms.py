@@ -16,11 +16,9 @@ class EquipeForm(forms.ModelForm):
         model = Equipe
         fields = '__all__'
         widgets = {
-            'nome': forms.TextInput(attrs={
-                'placeholder': 'Ex: Equipe Azul'
-            }),
+            'nome': forms.TextInput(),
             'ano': forms.NumberInput(attrs={
-                'placeholder': 'Ex: 2025'
+                'placeholder': 'Ano letivo (ex: 2026)'
             }),
             'serie': forms.TextInput(attrs={
                 'placeholder': 'Ex: 1º Ano'

@@ -12,12 +12,11 @@
 <!-- HEADER 100% -->
 <header class="header-full">
     <img src="{% static 'images/placar/ranking-header.png' %}" alt="Ranking Geral Interclasse">
-    <h1>2026</h1>
 </header>
 <!-- CONTEÚDO -->
 <main class="ranking-wrapper">
     <section class="ranking-grid">
-        {% for equipe in classificacao %}
+        {% for equipe, pontos in ranking %}
         <div class="ranking-item {% if item.posicao == 1 %}primeiro{% endif %}">
             <span class="posicao">{{ forloop.counter }}</span>
             <span class="nome">
@@ -29,7 +28,7 @@
     >
   {% endif %}
   {{ equipe.nome }}</span>
-            <span class="pontos">{{ equipe.total_pontos }} PTS</span>
+            <span class="pontos">{{ pontos }} PTS</span>
         </div>
         {% endfor %}
     </section>

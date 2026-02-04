@@ -1,44 +1,19 @@
-from django.shortcuts import render
-from django.views.generic import ListView
 from django.db.models import Q, Sum, F, IntegerField
 from django.db.models.functions import Coalesce
-
-from .models import Equipe, Modalidade
-
-def get_classificacao_geral():
-    return (
-        Equipe.objects
-        .annotate(
-            pontos_a=Coalesce(
-                Sum(
-                    "partidas_equipe_a__pontuacao_a",
-                    filter=Q(partidas_equipe_a__encerrada=True)
-                ),
-                0,
-                output_field=IntegerField()
-            ),
-            pontos_b=Coalesce(
-                Sum(
-                    "partidas_equipe_b__pontuacao_b",
-                    filter=Q(partidas_equipe_b__encerrada=True)
-                ),
-                0,
-                output_field=IntegerField()
-            ),
-        )
-        .annotate(total_pontos=F("pontos_a") + F("pontos_b"))
-        .order_by("-total_pontos", "nome")
-    )
+from collections import defaultdict
+from django.shortcuts import get_object_or_404, render
+from .models import (
+    Campeonato, Partida, Danca, Extra, Fase, Equipe
+)
 
 def home(request):
     slides = [
         "creditos.html",
-        "classificacao/geral.html",
+        "ranking_geral.html",
     ]
 
     return render(request, "home.html", {
         "slides": slides,
-        "classificacao": get_classificacao_geral(),
     })
 
 
@@ -46,53 +21,84 @@ def creditos(request):
     return render(request, 'creditos.html')
 
 
-class ClassificacaoModalidadeView(ListView):
-    template_name = "classificacao/modalidade.html"
-    context_object_name = "classificacao"
+from collections import defaultdict
+from django.shortcuts import get_object_or_404, render
+from .models import Campeonato, Partida, Danca, Extra, Fase, Equipe
 
-    def get_queryset(self):
-        modalidade_id = self.kwargs["modalidade_id"]
+PONTOS_COLOCACAO = {
+    1: 1000,
+    2: 800,
+    3: 600,
+    4: 400,
+}
 
-        return (
-            Equipe.objects
-            .annotate(
-                pontos_a=Coalesce(
-                    Sum(
-                        "partidas_equipe_a__pontuacao_a",
-                        filter=Q(
-                            partidas_equipe_a__modalidade_id=modalidade_id,
-                            partidas_equipe_a__encerrada=True
-                        )
-                    ),
-                    0,
-                    output_field=IntegerField()
-                ),
-                pontos_b=Coalesce(
-                    Sum(
-                        "partidas_equipe_b__pontuacao_b",
-                        filter=Q(
-                            partidas_equipe_b__modalidade_id=modalidade_id,
-                            partidas_equipe_b__encerrada=True
-                        )
-                    ),
-                    0,
-                    output_field=IntegerField()
-                ),
-            )
-            .annotate(total_pontos=F("pontos_a") + F("pontos_b"))
-            .order_by("-total_pontos", "nome")
+def ranking_geral(request, campeonato_id):
+    campeonato = get_object_or_404(Campeonato, id=campeonato_id)
+
+    # Inicializa o ranking com todas as equipes do campeonato e ano
+    equipes = Equipe.objects.filter(ano=campeonato.ano)
+    ranking = defaultdict(int)
+
+    # Adiciona todas as equipes ao ranking (mesmo que não tenham pontuado ainda)
+    for equipe in equipes:
+        ranking[equipe] = 0  # Inicializa as equipes com 0 pontos
+
+    # 🔹 PARTIDAS (Final e Terceiro Lugar)
+    partidas = Partida.objects.filter(
+        campeonato=campeonato,
+        encerrada=True,
+        fase__in=[Fase.FINAL, Fase.TERCEIRO]
+    ).select_related('equipe_a', 'equipe_b', 'vencedora')
+
+    for partida in partidas:
+        vencedora = partida.vencedora
+
+        if not vencedora:
+            continue
+
+        perdedora = (
+            partida.equipe_b if vencedora == partida.equipe_a
+            else partida.equipe_a
         )
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["modalidade"] = Modalidade.objects.get(
-            pk=self.kwargs["modalidade_id"]
-        )
-        return context
+        if partida.fase == Fase.FINAL:
+            ranking[vencedora] += PONTOS_COLOCACAO[1]
+            ranking[perdedora] += PONTOS_COLOCACAO[2]
 
-class ClassificacaoGeralView(ListView):
-    template_name = "classificacao/geral.html"
-    context_object_name = "classificacao"
+        elif partida.fase == Fase.TERCEIRO:
+            ranking[vencedora] += PONTOS_COLOCACAO[3]
+            ranking[perdedora] += PONTOS_COLOCACAO[4]
 
-    def get_queryset(self):
-        return get_classificacao_geral()
+    # 🔹 DANÇA
+    dancas = Danca.objects.filter(
+        campeonato=campeonato,
+        colocacao__in=[1, 2, 3, 4]
+    ).select_related('equipe')
+
+    for danca in dancas:
+        ranking[danca.equipe] += PONTOS_COLOCACAO[danca.colocacao]
+
+    # 🔹 EXTRAS (doações + / penalidades -)
+    extras = Extra.objects.filter(
+        campeonato=campeonato
+    ).select_related('equipe')
+
+    for extra in extras:
+        if extra.ocorrencia == 1:  # Doação
+            ranking[extra.equipe] += extra.pontos
+        elif extra.ocorrencia == 2:  # Penalidade
+            ranking[extra.equipe] -= extra.pontos
+
+    # 🔹 Ordenação
+    ranking_ordenado = sorted(
+        ranking.items(),
+        key=lambda item: item[1],
+        reverse=True
+    )
+
+    context = {
+        'campeonato': campeonato,
+        'ranking': ranking_ordenado
+    }
+
+    return render(request, 'ranking_geral.html', context)

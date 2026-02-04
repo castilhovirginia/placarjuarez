@@ -16,7 +16,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from placar.views import home, creditos, ClassificacaoModalidadeView, ClassificacaoGeralView
+from placar.views import home, creditos, ranking_geral
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -24,9 +24,5 @@ urlpatterns = [
                   path('admin/', admin.site.urls),
                   path('', home, name='home'),
                   path('creditos', creditos, name='creditos'),
-                  path("classificacao/modalidade/<int:modalidade_id>/", ClassificacaoModalidadeView.as_view(),
-                       name="classificacao_modalidade"
-                       ),
-                  path("classificacao/geral/", ClassificacaoGeralView.as_view(), name="classificacao_geral"
-                       ),
+                  path('ranking/<int:campeonato_id>/', ranking_geral, name='ranking_geral'),
               ]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

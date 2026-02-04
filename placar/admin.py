@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from django import forms
-from .models import Modalidade, Equipe, Partida, Campeonato, Danca
+from .models import Modalidade, Equipe, Partida, Campeonato, Danca, Extra
 from .forms import ModalidadeForm, EquipeForm
 from django.http import JsonResponse
 from django.urls import path
@@ -22,11 +22,12 @@ class ModalidadeAdmin(admin.ModelAdmin):
     list_display = (
         'nome',
         'categoria',
+        'possui_placar',
     )
 
-    list_filter = ('categoria',)
+    list_filter = ('categoria','possui_placar')
     search_fields = ('nome',)
-    ordering = ('nome',)
+    ordering = ('categoria','possui_placar')
 
 @admin.register(Equipe)
 class EquipeAdmin(admin.ModelAdmin):
@@ -45,24 +46,16 @@ class EquipeAdmin(admin.ModelAdmin):
 
     readonly_fields = ('logo_preview',)
 
-    fieldsets = (
-        ('Dados da Equipe', {
-            'fields': ('nome', 'serie', 'logo', 'logo_preview')
-        }),
-        ('Ano Letivo', {
-            'fields': ('ano',)
-        }),
-    )
 
     def logo_preview(self, obj):
         if not obj.logo:
-            return "Sem logo"
+            return "Logo não adicionado"
         return format_html(
             '<img src="{}" style="height: 80px; border-radius: 6px;" />',
             obj.logo.url
         )
 
-    logo_preview.short_description = "Logo"
+    logo_preview.short_description = "Visualização do logo"
 
 
 class PartidaAdminForm(forms.ModelForm):
@@ -214,12 +207,12 @@ class PartidaAdmin(admin.ModelAdmin):
         'data',
         'modalidade',
         'fase',
-        'vencedora',
-        'equipe_wo',
         'equipe_a',
         'placar_a',
         'equipe_b',
         'placar_b',
+        'vencedora',
+        'equipe_wo',
     )
 
     list_filter = ('modalidade', 'fase', 'encerrada')
@@ -290,7 +283,7 @@ class DancaAdmin(admin.ModelAdmin):
             path(
                 "equipes-por-campeonato/",
                 self.admin_site.admin_view(self.equipes_por_campeonato),
-                name="partida_equipes_por_campeonato",
+                name="danca_equipes_por_campeonato",
             ),
         ]
         return custom_urls + urls
@@ -318,6 +311,7 @@ class DancaAdmin(admin.ModelAdmin):
         'data_apresentacao',
         'horario_apresentacao',
         'colocacao',
+        'observacoes',
     )
 
     list_filter = (
@@ -332,5 +326,105 @@ class DancaAdmin(admin.ModelAdmin):
     ordering = (
         'data_apresentacao',
         'horario_apresentacao',
+        'colocacao',
     )
+
+class ExtraForm(forms.ModelForm):
+
+    class Meta:
+        model = Extra
+        fields = ['campeonato', 'equipe', 'ocorrencia', 'pontos', 'observacoes']
+        widgets = {
+            'observacoes': forms.Textarea(attrs={
+                'rows': 4,
+                'cols': 40
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)  #
+
+        campeonato = None
+
+        # 🔹 edição
+        if self.instance.pk:
+            campeonato = self.instance.campeonato
+
+        # 🔹 criação (quando o usuário já escolheu o campeonato)
+        elif 'campeonato' in self.data:
+            try:
+                campeonato_id = int(self.data.get('campeonato'))
+                campeonato = Campeonato.objects.get(pk=campeonato_id)
+            except (ValueError, Campeonato.DoesNotExist):
+                campeonato = None
+
+        # 🔹 filtrar equipes pelo ano do campeonato
+        if campeonato:
+            self.fields['equipe'].queryset = Equipe.objects.filter(
+                ano=campeonato.ano
+            )
+        else:
+            # enquanto não houver campeonato definido, não mostra ninguém
+            self.fields['equipe'].queryset = Equipe.objects.none()
+
+        # 🔒 Remover botões FK (como você já tinha)
+        fk_fields = [
+            'equipe',
+            'campeonato',
+        ]
+
+        for field_name in fk_fields:
+            field = self.fields.get(field_name)
+            if isinstance(field, forms.ModelChoiceField):
+                field.widget.can_add_related = False
+                field.widget.can_change_related = False
+                field.widget.can_delete_related = False
+                field.widget.can_view_related = False
+
+    def clean_pontos(self):
+        pontos = self.cleaned_data.get('pontos')
+        if pontos < 0:
+            raise forms.ValidationError('A pontuação não pode ser negativa.')
+        return pontos
+
+@admin.register(Extra)
+class ExtraAdmin(admin.ModelAdmin):
+    form = ExtraForm
+
+    class Media:
+        js = ("admin/js/extra.js",)
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "equipes-por-campeonato/",
+                self.admin_site.admin_view(self.equipes_por_campeonato),
+                name="extra_equipes_por_campeonato",
+            ),
+        ]
+        return custom_urls + urls
+
+    def equipes_por_campeonato(self, request):
+        campeonato_id = request.GET.get("campeonato_id")
+        equipes = []
+
+        if campeonato_id:
+            try:
+                campeonato = Campeonato.objects.get(pk=campeonato_id)
+                equipes = Equipe.objects.filter(ano=campeonato.ano)
+            except Campeonato.DoesNotExist:
+                pass
+
+        data = [
+            {"id": equipe.id, "text": str(equipe)}
+            for equipe in equipes
+        ]
+
+        return JsonResponse(data, safe=False)
+
+    list_display = ('id', 'equipe', 'ocorrencia', 'pontos', 'data_registro', 'observacoes')
+    list_filter = ('equipe', 'data_registro')
+    search_fields = ('equipe__nome', 'observacoes')
+    ordering = ('-data_registro',)
 

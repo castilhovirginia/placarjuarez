@@ -17,8 +17,8 @@ class Campeonato(models.Model):
 
 class Equipe(models.Model):
     nome = models.CharField(max_length=100)
-    ano = models.PositiveIntegerField(help_text="Ano letivo (ex: 2025)")
-    serie = models.CharField(max_length=20, help_text="Ex: 1º Ano")
+    ano = models.PositiveIntegerField()
+    serie = models.CharField(max_length=20)
     logo = models.ImageField(
         upload_to='equipes/logos/',
         null=True,
@@ -47,7 +47,7 @@ class Modalidade(models.Model):
     )
     possui_placar = models.BooleanField(
         default=True,
-        help_text="Marque se esta modalidade utiliza placar (ex: futebol)."
+        help_text="Desmarque se esta modalidade não utiliza placar (ex: Xadrez)."
     )
 
     def __str__(self):
@@ -58,6 +58,7 @@ class Fase(models.TextChoices):
     OITAVAS = 'OIT', 'Oitavas de Final'
     QUARTAS = 'QUA', 'Quartas de Final'
     SEMI = 'SEM', 'Semifinal'
+    TERCEIRO = 'TER', 'Terceiro Lugar'
     FINAL = 'FIN', 'Final'
 
 
@@ -236,6 +237,7 @@ class Danca(models.Model):
         (10, '10º Lugar'),
         (11, '11º Lugar'),
         (12, '12º Lugar'),
+        (0, 'Desclassificada'),
     ]
 
     campeonato = models.ForeignKey(Campeonato, related_name='dancas', on_delete=models.CASCADE)
@@ -247,12 +249,35 @@ class Danca(models.Model):
     )
     data_apresentacao = models.DateField()
     horario_apresentacao = models.TimeField()
-    colocacao = models.PositiveSmallIntegerField(choices=COLOCACAO_CHOICES)
+    colocacao = models.IntegerField(choices=COLOCACAO_CHOICES, null=True, blank=True)
+    observacoes = models.CharField( null=True, blank=True)
 
     def __str__(self):
         return (
             f"{self.equipe} - "
             f"{self.data_apresentacao} "
             f"{self.horario_apresentacao} "
-            f"({self.get_colocacao_display()})"
         )
+
+class Extra(models.Model):
+    class Meta:
+        verbose_name = "Doação ou penalidade"
+        verbose_name_plural = "Doações ou penalidades"
+
+    OCORRENCIAS_CHOICES = [
+        (1, 'Doações'),
+        (2, 'Penalidades'),
+        ]
+    campeonato = models.ForeignKey(Campeonato, related_name='pontosextras', on_delete=models.CASCADE)
+    equipe = models.ForeignKey(
+        Equipe,
+        on_delete=models.CASCADE,
+        related_name='pontos_extras'
+    )
+    ocorrencia = models.IntegerField(choices=OCORRENCIAS_CHOICES, null=True, blank=True)
+    pontos = models.IntegerField()
+    observacoes = models.TextField(blank=True, null=True)
+    data_registro = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.equipe} - {self.pontos} pontos"
