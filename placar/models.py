@@ -33,7 +33,7 @@ class Equipe(models.Model):
         unique_together = ('nome', 'ano')
 
     def __str__(self):
-        return f"{self.nome} - {self.serie} "
+        return f"{self.nome}"
 
 class Modalidade(models.Model):
     nome = models.CharField(max_length=100)
@@ -61,18 +61,49 @@ class Fase(models.TextChoices):
     TERCEIRO = 'TER', 'Terceiro Lugar'
     FINAL = 'FIN', 'Final'
 
+class NumeroPartida(models.TextChoices):
+    PRIMEIRA = 'PRI', '1ª'
+    SEGUNDA = 'SEG', '2ª'
+    TERCEIRA = 'TER', '3ª'
+    QUARTA = 'QUA', '4ª'
+    QUINTA = 'QUI', '5ª'
+    SEXTA = 'SEX', '6ª'
+    SETIMA = 'SET', '7ª'
+    OITAVA = 'OIT', '8ª'
+    NONA = 'NON', '9ª'
+    DECIMA = 'DEC', '10ª'
+    DECIMAPRIMEIRA = 'DECPRI', '11ª'
+    DECIMASEGUNDA = 'DECSEG', '12ª'
+
+PROXIMAS_PARTIDAS = {
+    "PRI": {"numero": "QUI", "campo": "equipe_b", "vencedora": True},
+    "SEG": {"numero": "SEX", "campo": "equipe_b", "vencedora": True},
+    "TER": {"numero": "SET", "campo": "equipe_b", "vencedora": True},
+    "QUA": {"numero": "OIT", "campo": "equipe_b", "vencedora": True},
+    "QUI": {"numero": "NON", "campo": "equipe_a", "vencedora": True},
+    "SEX": {"numero": "NON", "campo": "equipe_b", "vencedora": True},
+    "SET": {"numero": "DEC", "campo": "equipe_a", "vencedora": True},
+    "OIT": {"numero": "DEC", "campo": "equipe_b", "vencedora": True},
+    "NON": {"numero": "DECPRI", "campo": "equipe_a", "vencedora": True},   # vencedora da NON
+    "DEC": {"numero": "DECSEG", "campo": "equipe_b", "vencedora": True},  # vencedora da DEC
+    "DECPRI": {"numero": "DECSEG", "campo": "equipe_a", "vencedora": False}, # perdedora da DECPRI
+    "DECSEG": None,  # Final, não há próxima
+}
 
 class Partida(models.Model):
     campeonato = models.ForeignKey(Campeonato, related_name='partidas', on_delete=models.CASCADE)
     fase = models.CharField(max_length=3, choices=Fase.choices)
     modalidade = models.ForeignKey(Modalidade, related_name='modalidade', on_delete=models.CASCADE)
-    data = models.DateTimeField(verbose_name="Data e horário")
+    numero = models.CharField(max_length=6, verbose_name="Número da partida", choices=NumeroPartida.choices)
+    data = models.DateField(verbose_name="Data")
+    horario = models.TimeField(verbose_name="Horário", null=True, blank=True)
     equipe_a = models.ForeignKey(
-        Equipe, related_name='partidas_equipe_a', verbose_name="Equipe A", on_delete=models.CASCADE
-    )
+        Equipe, related_name='partidas_equipe_a', verbose_name="Equipe A", on_delete=models.CASCADE, null=True,
+        blank=True,)
     equipe_b = models.ForeignKey(
-        Equipe, related_name='partidas_equipe_b', verbose_name="Equipe B", on_delete=models.CASCADE
-    )
+        Equipe, related_name='partidas_equipe_b', verbose_name="Equipe B", on_delete=models.CASCADE, null=True,
+        blank=True,)
+    iniciada = models.BooleanField("Partida iniciada", default=False)
     houve_wo = models.BooleanField("Houve WO?", default=False, help_text="Preencha ao iniciar a partida. Irá habilitar ou não  o placar.")
     equipe_wo = models.ForeignKey(Equipe,
                                   null=True,
@@ -117,52 +148,53 @@ class Partida(models.Model):
 
         return None
 
+    def atualizar_proxima_partida(self):
+        """
+        Atualiza automaticamente a próxima partida conforme o fluxo do torneio.
+        """
+        if not self.vencedora or not self.encerrada:
+            return  # só funciona se houver vencedora
+
+        info = PROXIMAS_PARTIDAS.get(self.numero)
+        if not info:
+            return  # final ou sem mapeamento
+
+        try:
+            prox_partida = Partida.objects.get(
+                campeonato=self.campeonato,
+                numero=info["numero"]
+            )
+        except Partida.DoesNotExist:
+            return
+
+        # determina se vai colocar vencedora ou perdedora
+        if info["vencedora"]:
+            equipe = self.vencedora
+        else:
+            # perdedora → pega a outra equipe
+            equipe = self.equipe_a if self.vencedora_id != self.equipe_a_id else self.equipe_b
+
+        setattr(prox_partida, info["campo"], equipe)
+        prox_partida.save()
+
     def clean(self):
         errors = {}
 
-        # use _id, nunca o objeto
-        if not self.equipe_a_id:
-            errors['equipe_a'] = "Informe a equipe A."
+        if self.equipe_a_id and self.equipe_b_id:
 
-        if not self.equipe_b_id:
-            errors['equipe_b'] = "Informe a equipe B."
-
-        if errors:
-            raise ValidationError(errors)
-
-        # agora é seguro acessar os objetos
-        if self.equipe_a_id == self.equipe_b_id:
-            raise ValidationError(
-                {"equipe_b": "Equipe A e B não podem ser a mesma."}
-            )
-
-        if self.houve_wo:
-            if not self.equipe_wo_id:
+            if self.equipe_a_id == self.equipe_b_id:
                 raise ValidationError(
-                    {"equipe_wo": "Informe qual equipe deu WO."}
+                    {"equipe_b": "Equipe A e B não podem ser a mesma."}
                 )
 
-            if self.equipe_wo_id not in (self.equipe_a_id, self.equipe_b_id):
-                raise ValidationError(
-                    {"equipe_wo": "Equipe WO deve participar da partida."}
-                )
-
-            if self.placar_a is not None or self.placar_b is not None:
-                raise ValidationError(
-                    "Partida com WO não deve ter placar."
-                )
+            if self.encerrada and self.houve_wo is True:
+                if self.equipe_wo_id not in (self.equipe_a_id, self.equipe_b_id):
+                    errors['equipe_wo'] = "Escolha a equipe que não compareceu: Equipe A ou Equipe B."
 
         modalidade = self.modalidade
 
         # 🟦 MODALIDADE COM PLACAR
         if modalidade and modalidade.possui_placar:
-
-            if self.houve_wo:
-                if not self.equipe_wo_id:
-                    errors['equipe_wo'] = "Informe qual equipe deu WO."
-
-                if self.placar_a is not None or self.placar_b is not None:
-                    raise ValidationError("Partida com WO não deve ter placar.")
 
             if self.encerrada and not self.houve_wo:
                 if self.placar_a is None or self.placar_b is None:
@@ -179,20 +211,6 @@ class Partida(models.Model):
 
         # 🟨 MODALIDADE SEM PLACAR
         if modalidade and not modalidade.possui_placar:
-
-            # ❌ não pode preencher placar
-            if self.placar_a is not None or self.placar_b is not None:
-                raise ValidationError(
-                    "Esta modalidade não utiliza placar."
-                )
-
-            # ✅ pode ter WO
-            if self.houve_wo:
-                if not self.equipe_wo_id:
-                    errors['equipe_wo'] = "Informe qual equipe deu WO."
-
-                if self.equipe_wo_id not in (self.equipe_a_id, self.equipe_b_id):
-                    errors['equipe_wo'] = "Equipe WO deve participar da partida."
 
             # 🔒 encerrada
             if self.encerrada:
@@ -218,8 +236,9 @@ class Partida(models.Model):
 
         super().save(*args, **kwargs)
 
-    def __str__(self):
-        return f"{self.campeonato} - {self.modalidade} – {self.equipe_a} x {self.equipe_b}"
+        # 🔹 Atualiza próxima partida automaticamente
+        if self.encerrada and self.vencedora:
+            self.atualizar_proxima_partida()
 
 
 class Danca(models.Model):
@@ -250,7 +269,7 @@ class Danca(models.Model):
     data_apresentacao = models.DateField()
     horario_apresentacao = models.TimeField()
     colocacao = models.IntegerField(choices=COLOCACAO_CHOICES, null=True, blank=True)
-    observacoes = models.CharField( null=True, blank=True)
+    observacoes = models.CharField( null=True, blank=True, max_length=255)
 
     def __str__(self):
         return (
@@ -276,7 +295,7 @@ class Extra(models.Model):
     )
     ocorrencia = models.IntegerField(choices=OCORRENCIAS_CHOICES, null=True, blank=True)
     pontos = models.IntegerField()
-    observacoes = models.TextField(blank=True, null=True)
+    observacoes = models.TextField(blank=True, null=True, max_length=255)
     data_registro = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

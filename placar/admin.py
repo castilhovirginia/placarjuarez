@@ -207,6 +207,7 @@ class PartidaAdmin(admin.ModelAdmin):
         'data',
         'modalidade',
         'fase',
+        'numero',
         'equipe_a',
         'placar_a',
         'equipe_b',

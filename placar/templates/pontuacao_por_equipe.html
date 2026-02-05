@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pontuação por Equipe</title>
+</head>
+<body>
+    <h1>Pontuação da equipe: {{ equipe.nome }}</h1>
+
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Campeonato</th>
+                <th>Modalidade</th>
+                <th>Fase</th> <!-- Coluna para a Fase -->
+                <th>Adversário</th>
+                <th>Placar</th>
+                <th>Resultado</th>
+                <th>Pontuação</th>
+                <th>Data</th> <!-- Coluna para a Data -->
+            </tr>
+        </thead>
+        <tbody>
+            {% for resultado in resultados %}
+            <tr>
+                <td>{{ resultado.campeonato }}</td>
+                <td>{{ resultado.modalidade }}</td>
+                <td>{{ resultado.fase }}</td>
+                <td>{{ resultado.adversario }}</td>
+                <td>{{ resultado.placar }}</td>
+                <td>{{ resultado.resultado }}</td>
+                <td>{{ resultado.pontuacao }}</td>
+                <td>{{ resultado.data|date:"d/m/Y H:i" }}</td> <!-- Exibindo a data formatada -->
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h3>Pontos Extras</h3>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Doações</th>
+                <th>Penalidades</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>{{ doacoes_pontos }}</td>
+                <td>{{ penalidades_pontos }}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>Total de Pontos</h3>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>{{ total_pontos }}</td>
+            </tr>
+        </tbody>
+    </table>
+</body>
+</html>
+
