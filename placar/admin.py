@@ -149,6 +149,17 @@ class PartidaAdminForm(forms.ModelForm):
             return False
         return None
 
+    def clean(self):
+        cleaned_data = super().clean()
+
+        if cleaned_data.get("iniciada") and cleaned_data.get("houve_wo") is None:
+            self.add_error(
+                "houve_wo",
+                "Informe se houve ou não WO. Ou desmarque a partida como iniciada."
+            )
+
+        return cleaned_data
+
 
 @admin.register(Partida)
 class PartidaAdmin(admin.ModelAdmin):
@@ -156,6 +167,7 @@ class PartidaAdmin(admin.ModelAdmin):
 
     class Media:
         js = ("admin/js/partida.js",)
+
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         field = super().formfield_for_foreignkey(db_field, request, **kwargs)

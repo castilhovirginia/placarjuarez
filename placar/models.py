@@ -75,27 +75,62 @@ class NumeroPartida(models.TextChoices):
     DECIMAPRIMEIRA = 'DECPRI', '11ª'
     DECIMASEGUNDA = 'DECSEG', '12ª'
 
+NUMEROS_POR_FASE = {
+    'OIT': ['PRI', 'SEG', 'TER', 'QUA'],         # Oitavas
+    'QUA': ['QUI', 'SEX', 'SET', 'OIT'],         # Quartas
+    'SEM': ['NON', 'DEC'],                        # Semifinal
+    'TER': ['DECPRI'],                            # Terceiro lugar
+    'FIN': ['DECSEG'],                            # Final
+}
+
 PROXIMAS_PARTIDAS = {
     "PRI": {"numero": "QUI", "campo": "equipe_b", "vencedora": True},
     "SEG": {"numero": "SEX", "campo": "equipe_b", "vencedora": True},
     "TER": {"numero": "SET", "campo": "equipe_b", "vencedora": True},
     "QUA": {"numero": "OIT", "campo": "equipe_b", "vencedora": True},
+
+    # QUARTAS → SEMIFINAIS
     "QUI": {"numero": "NON", "campo": "equipe_a", "vencedora": True},
     "SEX": {"numero": "NON", "campo": "equipe_b", "vencedora": True},
     "SET": {"numero": "DEC", "campo": "equipe_a", "vencedora": True},
     "OIT": {"numero": "DEC", "campo": "equipe_b", "vencedora": True},
-    "NON": {"numero": "DECPRI", "campo": "equipe_a", "vencedora": True},   # vencedora da NON
-    "DEC": {"numero": "DECSEG", "campo": "equipe_b", "vencedora": True},  # vencedora da DEC
-    "DECPRI": {"numero": "DECSEG", "campo": "equipe_a", "vencedora": False}, # perdedora da DECPRI
-    "DECSEG": None,  # Final, não há próxima
+
+    # SEMIFINAL → FINAL
+    "NON": {
+        "vencedor": {"numero": "DECSEG", "campo": "equipe_a"},
+        "perdedor": {"numero": "DECPRI", "campo": "equipe_a"}
+    },
+    "DEC": {
+        "vencedor": {"numero": "DECSEG", "campo": "equipe_b"},
+        "perdedor": {"numero": "DECPRI", "campo": "equipe_b"}
+    },
+
+    # TERCEIRO / FINAL
+    "DECPRI": None,
+    "DECSEG": None
 }
 
+
 class Partida(models.Model):
-    campeonato = models.ForeignKey(Campeonato, related_name='partidas', on_delete=models.CASCADE)
-    fase = models.CharField(max_length=3, choices=Fase.choices)
-    modalidade = models.ForeignKey(Modalidade, related_name='modalidade', on_delete=models.CASCADE)
-    numero = models.CharField(max_length=6, verbose_name="Número da partida", choices=NumeroPartida.choices)
-    data = models.DateField(verbose_name="Data")
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['campeonato', 'modalidade', 'numero'],
+                name='unique_partida_por_campeonato_modalidade_numero'
+            )
+        ]
+
+    campeonato = models.ForeignKey(Campeonato, related_name='partidas', on_delete=models.CASCADE, null=True,
+                                   blank=True)
+    fase = models.CharField(max_length=3, choices=Fase.choices, null=True,
+                                   blank=True)
+    modalidade = models.ForeignKey(Modalidade, related_name='modalidade', on_delete=models.CASCADE, null=True,
+                                   blank=True)
+    numero = models.CharField(max_length=6, verbose_name="Número da partida", choices=NumeroPartida.choices, null=True,
+                                   blank=True)
+    data = models.DateField(verbose_name="Data", null=True,
+                                   blank=True)
     horario = models.TimeField(verbose_name="Horário", null=True, blank=True)
     equipe_a = models.ForeignKey(
         Equipe, related_name='partidas_equipe_a', verbose_name="Equipe A", on_delete=models.CASCADE, null=True,
@@ -104,7 +139,8 @@ class Partida(models.Model):
         Equipe, related_name='partidas_equipe_b', verbose_name="Equipe B", on_delete=models.CASCADE, null=True,
         blank=True,)
     iniciada = models.BooleanField("Partida iniciada", default=False)
-    houve_wo = models.BooleanField("Houve WO?", default=False, help_text="Preencha ao iniciar a partida. Irá habilitar ou não  o placar.")
+    houve_wo = models.BooleanField("Houve WO?", null=True, blank=True,
+                                   help_text="Preencha ao iniciar a partida. Irá habilitar ou não  o placar.")
     equipe_wo = models.ForeignKey(Equipe,
                                   null=True,
                                   blank=True,
@@ -150,35 +186,64 @@ class Partida(models.Model):
 
     def atualizar_proxima_partida(self):
         """
-        Atualiza automaticamente a próxima partida conforme o fluxo do torneio.
+        Atualiza SEMPRE a próxima partida.
+        Se não houver vencedora, limpa o campo correspondente.
         """
-        if not self.vencedora or not self.encerrada:
-            return  # só funciona se houver vencedora
 
         info = PROXIMAS_PARTIDAS.get(self.numero)
         if not info:
             return  # final ou sem mapeamento
 
+        # trata casos especiais (semifinal com vencedor e perdedor)
+        if "vencedor" in info and "perdedor" in info:
+            if self.vencedora:
+                prox_info = info["vencedor"]
+                equipe = self.vencedora
+            else:
+                prox_info = info["perdedor"]
+                equipe = self.equipe_a if self.vencedora_id != self.equipe_a_id else self.equipe_b
+        else:
+            prox_info = info
+            if self.vencedora:
+                equipe = self.vencedora if prox_info.get("vencedora", True) else (
+                    self.equipe_a if self.vencedora_id != self.equipe_a_id else self.equipe_b
+                )
+            else:
+                equipe = None  # se ninguém venceu, limpa
+
         try:
             prox_partida = Partida.objects.get(
                 campeonato=self.campeonato,
-                numero=info["numero"]
+                numero=prox_info["numero"]
             )
         except Partida.DoesNotExist:
             return
 
-        # determina se vai colocar vencedora ou perdedora
-        if info["vencedora"]:
-            equipe = self.vencedora
-        else:
-            # perdedora → pega a outra equipe
-            equipe = self.equipe_a if self.vencedora_id != self.equipe_a_id else self.equipe_b
-
-        setattr(prox_partida, info["campo"], equipe)
+        setattr(prox_partida, prox_info["campo"], equipe)
         prox_partida.save()
 
     def clean(self):
         errors = {}
+
+        if not self.campeonato:
+            errors['campeonato'] = "Campo obrigatório."
+            raise ValidationError(errors)
+
+        if not self.fase:
+            errors['fase'] = "Campo obrigatório."
+            raise ValidationError(errors)
+
+        if not self.modalidade:
+            errors['modalidade'] = "Campo obrigatório."
+            raise ValidationError(errors)
+
+        if not self.numero:
+            errors['numero'] = "Campo obrigatório."
+            raise ValidationError(errors)
+
+        if not self.data:
+            errors['data'] = "Campo obrigatório."
+            raise ValidationError(errors)
 
         if self.equipe_a_id and self.equipe_b_id:
 
@@ -223,11 +288,30 @@ class Partida(models.Model):
                             "Informe a equipe vencedora para encerrar a partida."
                         )
 
+        # 🔒 Evita duplicidade de número por campeonato + modalidade
+        if self.campeonato and self.modalidade and self.numero:
+            qs = Partida.objects.filter(
+                campeonato=self.campeonato,
+                modalidade=self.modalidade,
+                numero=self.numero,
+            )
+
+            # exclui a própria instância em edição
+            if self.pk:
+                qs = qs.exclude(pk=self.pk)
+
+            if qs.exists():
+                errors['numero'] = (
+                    "Já existe uma partida com este número "
+                    "para este campeonato e modalidade."
+                )
+
         if errors:
             raise ValidationError(errors)
 
     def save(self, *args, **kwargs):
-        self.full_clean()  # 🔥 ESSENCIAL
+
+        self.full_clean()
 
         if self.encerrada:
             self.vencedora = self.definir_vencedora()
@@ -236,9 +320,7 @@ class Partida(models.Model):
 
         super().save(*args, **kwargs)
 
-        # 🔹 Atualiza próxima partida automaticamente
-        if self.encerrada and self.vencedora:
-            self.atualizar_proxima_partida()
+        self.atualizar_proxima_partida()
 
 
 class Danca(models.Model):

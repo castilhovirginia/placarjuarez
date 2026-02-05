@@ -109,12 +109,9 @@ document.addEventListener("DOMContentLoaded", function () {
             if (houveWoEhSim) {
                 showRow(equipeWoRow, equipeWo, true);
                 showRow(encerradaRow, encerrada);
-                encerrada.checked = true;
-                encerrada.disabled = true;
             } else {
                 showRow(vencedoraRow, vencedora, true);
                 showRow(encerradaRow, encerrada);
-                encerrada.disabled = false;
             }
             return;
         }
@@ -125,16 +122,12 @@ document.addEventListener("DOMContentLoaded", function () {
         if (houveWoEhSim) {
             showRow(equipeWoRow, equipeWo, true);
             showRow(encerradaRow, encerrada);
-            encerrada.checked = true;
-            encerrada.disabled = false;
         }
 
         if (houveWoEhNao) {
             showRow(placarARow, placarA, true);
             showRow(placarBRow, placarB, true);
             showRow(encerradaRow, encerrada);
-            encerrada.disabled = false;
-            encerrada.checked = false;
         }
     }
 
@@ -223,3 +216,102 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 });
 
+document.addEventListener('DOMContentLoaded', function() {
+    const faseField = document.getElementById('id_fase');
+    const numeroField = document.getElementById('id_numero');
+
+    // Mapear números válidos por fase
+    const numerosPorFase = {
+        'OIT': ['PRI', 'SEG', 'TER', 'QUA'],
+        'QUA': ['QUI', 'SEX', 'SET', 'OIT'],
+        'SEM': ['NON', 'DEC'],
+        'TER': ['DECPRI'],
+        'FIN': ['DECSEG']
+    };
+
+    function updateNumeroOptions() {
+        const fase = faseField.value;
+        const validNumbers = numerosPorFase[fase] || [];
+
+        // Habilitar/desabilitar opções existentes
+        for (let i = 0; i < numeroField.options.length; i++) {
+            const option = numeroField.options[i];
+
+            // Sempre permite a opção vazia
+            if (option.value === "") {
+                option.disabled = false;
+                continue;
+            }
+
+            option.disabled = !validNumbers.includes(option.value);
+        }
+
+        // Se o valor atual não for válido, seleciona o primeiro válido
+        if (!validNumbers.includes(numeroField.value) && validNumbers.length > 0) {
+            numeroField.value = validNumbers[0];
+        }
+    }
+
+    // Atualiza ao mudar a fase
+    faseField.addEventListener('change', updateNumeroOptions);
+
+    // Inicializa ao carregar a página
+    updateNumeroOptions();
+});
+
+document.addEventListener('DOMContentLoaded', function () {
+    const iniciadaCheckbox = document.getElementById('id_iniciada');
+
+    if (!iniciadaCheckbox) return;
+
+    // guarda o valor original (importante ao editar)
+    let valorAnterior = iniciadaCheckbox.checked;
+
+    iniciadaCheckbox.addEventListener('change', function () {
+
+        // TRUE → FALSE
+        if (!this.checked && valorAnterior) {
+            const confirmado = confirm(
+                "⚠️ Atenção!\n\n" +
+                "Ao desmarcar a partida como iniciada, o resultado será apagado e os dados que eventualmente tenham sido gravados na próxima fase também.\n\n" +
+                "Deseja continuar?"
+            );
+
+            if (!confirmado) {
+                this.checked = true; // volta para true
+            }
+        }
+
+        valorAnterior = this.checked;
+    });
+});
+
+document.addEventListener('DOMContentLoaded', function () {
+    const encerradaCheckbox = document.getElementById('id_encerrada');
+
+    if (!encerradaCheckbox) return;
+
+    // valor original ao carregar o form (edição)
+    let valorAnterior = encerradaCheckbox.checked;
+
+    encerradaCheckbox.addEventListener('change', function () {
+
+        // só entra se houve mudança real
+        if (this.checked !== valorAnterior) {
+
+            const mensagem = this.checked
+                ? "⚠️ Atenção!\n\nAo ENCERRAR a partida, o resultado será enviado para a próxima fase.\n\nVerifique se está tudo correto!"
+                : "⚠️ Atenção!\n\nAo REABRIR a partida, o resultado será removido da próxima fase.\n\nVerifique se é isso que deseja e que está tudo correto antes de salvar!";
+
+            const confirmado = confirm(mensagem);
+
+            if (!confirmado) {
+                // volta ao estado anterior
+                this.checked = valorAnterior;
+                return;
+            }
+
+            valorAnterior = this.checked;
+        }
+    });
+});
