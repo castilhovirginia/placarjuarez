@@ -71,21 +71,23 @@ class PartidaAdmin(admin.ModelAdmin):
     class Media:
         js = ("admin/js/partida.js",)
 
-
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
         field = super().formfield_for_foreignkey(db_field, request, **kwargs)
 
         if db_field.name == "modalidade":
-            mapa = {
+            # Mapa de possui_placar
+            mapa_placar = {
                 str(m.id): m.possui_placar
                 for m in Modalidade.objects.all()
             }
+            field.widget.attrs["data-possui-placar-map"] = json.dumps(mapa_placar, ensure_ascii=True)
 
-            # Garante que o JSON esteja bem escapado para uso no HTML
-            json_mapa = json.dumps(mapa, ensure_ascii=True)
-
-            # Atribui o JSON ao atributo 'data-possui-placar-map' de forma segura
-            field.widget.attrs["data-possui-placar-map"] = json_mapa
+            # Mapa de possui_sets
+            mapa_sets = {
+                str(m.id): m.possui_sets  # <-- aqui
+                for m in Modalidade.objects.all()
+            }
+            field.widget.attrs["data-possui-set-map"] = json.dumps(mapa_sets, ensure_ascii=True)
 
         return field
 

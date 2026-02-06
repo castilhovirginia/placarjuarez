@@ -42,9 +42,7 @@ document.addEventListener("DOMContentLoaded", function () {
         "houveWo", "equipeWo",
         "placarA", "placarB",
         "houveEmpate", "desempateA", "desempateB",
-        ...setFields,
-        "vencedora",
-        "encerrada"
+        "vencedora", "encerrada"
     ];
 
     // =========================
@@ -70,19 +68,22 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
-    function hideDependentes() {
-        dependentes.forEach(f => hide(f));
-    }
-
-    // =========================
-    // 📦 MAPAS DO TEMPLATE
-    // =========================
-    const possuiPlacarMap = JSON.parse(fields.modalidade?.dataset.possuiPlacarMap || "{}");
-    const possuiSetMap = JSON.parse(fields.modalidade?.dataset.possuiSet || "{}");
-
     // =========================
     // 🧠 ESTADO
     // =========================
+    function parseDatasetJSON(datasetAttr) {
+        if (!datasetAttr) return {};
+        try {
+            return JSON.parse(datasetAttr.replace(/&quot;/g, '"'));
+        } catch (e) {
+            console.error("Erro ao ler dataset JSON", e, datasetAttr);
+            return {};
+        }
+    }
+
+    const possuiPlacarMap = parseDatasetJSON(fields.modalidade?.dataset.possuiPlacarMap);
+    const possuiSetMap = parseDatasetJSON(fields.modalidade?.dataset.possuiSetMap);
+
     function isTrue(value) {
         return ["true", "True", "sim", "1"].includes(String(value));
     }
@@ -102,31 +103,33 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     // =========================
+    // 🔹 FUNÇÃO DE OCULTAÇÃO INICIAL
+    // =========================
+    function hideDependentes() {
+        dependentes.forEach(f => hide(f));
+
+        const s = getState();
+        if (s.possuiSet) {
+            setFields.forEach(f => hide(f));
+            hide("houveEmpate");
+        }
+    }
+
+    // =========================
     // 🎨 RENDER
     // =========================
     function render() {
-        // Oculta todos os campos dependentes
-        hideDependentes();
-
-        // Campos sempre visíveis
-        show("modalidade");
-        show("iniciada");
-        show("equipeA");
-        show("equipeB");
-
         const s = getState();
 
-        // ⛔ Partida não iniciada → só mostra os campos base
+        hideDependentes();
+        ["modalidade", "iniciada", "equipeA", "equipeB"].forEach(f => show(f));
+
         if (!s.iniciada) return;
 
-        // ▶ Iniciada → mostrar Houve WO
         show("houveWo", { required: true });
-
         if (!s.houveWoValor) return;
 
-        // =========================
-        // 🟨 Sem placar
-        // =========================
+        // Sem placar
         if (!s.possuiPlacar) {
             if (s.houveWoSim) {
                 show("equipeWo", { required: true });
@@ -137,34 +140,40 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
-        // =========================
-        // 🟦 Com placar
-        // =========================
+        // Com placar e houve WO
         if (s.houveWoSim) {
             show("equipeWo", { required: true });
             show("encerrada");
             return;
         }
 
-        // 🟦 Com placar, sem WO
-        show("placarA", { required: true });
-        show("placarB", { required: true });
-        show("houveEmpate");
-        show("encerrada");
+        // Modalidade com sets
+        if (s.possuiSet) {
+            if (s.iniciada && !s.houveWoSim) {
+                // Mostrar sets
+                setFields.forEach(f => show(f, { required: true }));
 
-        // ⚖️ Empate
-        if (s.houveEmpateSim) {
-            show("desempateA", { required: true });
-            show("desempateB", { required: true });
+                // Mostrar placar A e B sempre que houver sets
+                show("placarA", { required: true });
+                show("placarB", { required: true });
 
-            // Torna placares somente leitura
-            show("placarA", { readOnly: true });
-            show("placarB", { readOnly: true });
-        }
+                show("encerrada");
+            }
+            hide("houveEmpate"); // sempre oculto
+        } else {
+            // Modalidade sem sets
+            show("placarA", { required: true });
+            show("placarB", { required: true });
+            show("houveEmpate");
+            show("encerrada");
 
-        // 🆕 Campos de sets
-        if (s.possuiPlacar && !s.houveWoSim && s.possuiSet) {
-            setFields.forEach(f => show(f));
+            if (s.houveEmpateSim) {
+                show("desempateA", { required: true });
+                show("desempateB", { required: true });
+
+                show("placarA", { readOnly: true });
+                show("placarB", { readOnly: true });
+            }
         }
     }
 
@@ -176,28 +185,23 @@ document.addEventListener("DOMContentLoaded", function () {
             alert("Selecione a Equipe A e a Equipe B antes de iniciar a partida.");
             return false;
         }
-
         if (fields.equipeA.value === fields.equipeB.value) {
             alert("Equipe A e Equipe B não podem ser a mesma.");
             return false;
         }
-
         return true;
     }
 
     function podeMarcarEmpate() {
         const a = fields.placarA?.value;
         const b = fields.placarB?.value;
-
         if (a === "" || b === "") return false;
         return Number(a) === Number(b);
     }
 
     function limparDependentes() {
-        dependentes.forEach(f => {
-            if (fields[f]) fields[f].value = "";
-        });
-
+        dependentes.forEach(f => { if (fields[f]) fields[f].value = ""; });
+        setFields.forEach(f => { if (fields[f]) fields[f].value = ""; });
         if (fields.encerrada) fields.encerrada.checked = false;
     }
 
@@ -211,9 +215,7 @@ document.addEventListener("DOMContentLoaded", function () {
             fields.iniciada.checked = false;
             return;
         }
-
         if (!fields.iniciada.checked) limparDependentes();
-
         render();
     });
 
@@ -228,10 +230,17 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     // =========================
-    // 🚀 INIT
+    // 🔹 INIT – OCULTAR SETS E EMPATE
+    // =========================
+    setFields.forEach(f => hide(f));
+    hide("houveEmpate");
+
+    // =========================
+    // 🚀 RENDER INICIAL
     // =========================
     render();
 });
+
 
 
 document.addEventListener('DOMContentLoaded', function () {
