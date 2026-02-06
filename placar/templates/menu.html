@@ -1,13 +1,9 @@
 {% load static %}
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <title>Placar</title>
-    <link rel="stylesheet" href="{% static 'css/placar/menu.css' %}">
-</head>
-<body>
 
+{% block extra_css %}
+    <link rel="stylesheet" href="{% static 'css/placar/menu.css' %}">
+{% endblock %}
+{% block content %}
 <header class="navbar">
     <div class="logo">
         <a href="{% url 'home' %}">Placar Interclasse Juarez Wanderley</a>
@@ -21,8 +17,6 @@
         <a href="{% url 'ranking_geral' campeonato_id='1' %}">Ranking</a>
     </nav>
 </header>
-
-{% block content %}
 {% endblock %}
 
 <script>
@@ -30,6 +24,3 @@ function toggleMenu() {
     document.querySelector('.menu').classList.toggle('active');
 }
 </script>
-
-</body>
-</html>

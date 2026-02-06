@@ -2,9 +2,33 @@ from django.db import models
 from django.core.validators import FileExtensionValidator
 from django.core.exceptions import ValidationError
 
+def ranking_header_upload_path(instance, filename):
+    return f'campeonato/ranking_geral_header{instance.ano}.png'
+
+def ranking_footer_upload_path(instance, filename):
+    return f'campeonato/footer{instance.ano}.png'
+
 class Campeonato(models.Model):
     nome = models.CharField(max_length=100)
     ano = models.PositiveIntegerField()
+    header_ranking = models.ImageField(
+        upload_to=ranking_header_upload_path,
+        null=True,
+        blank=True,
+        validators=[
+            FileExtensionValidator(allowed_extensions=['jpg', 'jpeg', 'png'])
+        ],
+        help_text="Header do ranking")
+
+    footer_ranking = models.ImageField(
+        upload_to=ranking_footer_upload_path,
+        null=True,
+        blank=True,
+        validators=[
+            FileExtensionValidator(allowed_extensions=['jpg', 'jpeg', 'png'])
+        ],
+        help_text="Footer do ranking"
+    )
 
     class Meta:
         ordering = ['-ano', 'nome']
@@ -14,26 +38,34 @@ class Campeonato(models.Model):
     def __str__(self):
         return f"{self.nome} {self.ano}"
 
+def logo_upload_path(instance, filename):
+    ext = filename.split('.')[-1]
+    nome_normalizado = instance.nome.lower().replace(' ', '_')
+    return f"equipes/{nome_normalizado}.{ext}"
 
 class Equipe(models.Model):
     nome = models.CharField(max_length=100)
     ano = models.PositiveIntegerField()
     serie = models.CharField(max_length=20)
     logo = models.ImageField(
-        upload_to='equipes/logos/',
+        upload_to=logo_upload_path,
         null=True,
         blank=True,
-        validators=[
-            FileExtensionValidator(allowed_extensions=['jpg', 'jpeg'])
-        ],
-        help_text="Logo da equipe (JPG, opcional)"
+        validators=[FileExtensionValidator(allowed_extensions=['png'])],
+        help_text="Logo da equipe (PNG)"
     )
 
     class Meta:
         unique_together = ('nome', 'ano')
 
     def __str__(self):
-        return f"{self.nome}"
+        return self.nome
+
+
+def logo_mod_upload_path(instance, filename):
+    ext = filename.split('.')[-1]
+    nome_normalizado = instance.nome.lower().replace(' ', '_')
+    return f"modalidade/{nome_normalizado}.{ext}"
 
 class Modalidade(models.Model):
     nome = models.CharField(max_length=100)
@@ -45,9 +77,20 @@ class Modalidade(models.Model):
             ('Misto', 'Misto'),
         ]
     )
+    header = models.ImageField(
+        upload_to=logo_mod_upload_path,
+        null=True,
+        blank=True,
+        validators=[FileExtensionValidator(allowed_extensions=['png'])],
+        help_text="Header da página da modalidade)"
+    )
     possui_placar = models.BooleanField(
         default=True,
         help_text="Desmarque se esta modalidade não utiliza placar (ex: Xadrez)."
+    )
+    possui_sets = models.BooleanField(
+        default=False,
+        help_text="Marque se esta modalidade utiliza sets (ex: Volei)."
     )
 
     def __str__(self):
@@ -150,23 +193,29 @@ class Partida(models.Model):
                                   )
     placar_a = models.IntegerField("Placar Equipe A", null=True, blank=True)
     placar_b = models.IntegerField("Placar Equipe B", null=True, blank=True)
+    primeiroset_a = models.IntegerField("Pontuação Primeiro Set Equipe A", null=True, blank=True)
+    primeiroset_b = models.IntegerField("Pontuação Primeiro Set Equipe B", null=True, blank=True)
+    segundoset_a = models.IntegerField("Pontuação Segundo Set Equipe A", null=True, blank=True)
+    segundoset_b = models.IntegerField("Pontuação Segundo Set Equipe B", null=True, blank=True)
+    terceiroset_a = models.IntegerField("Pontuação Terceiro Set Equipe A", null=True, blank=True)
+    terceiroset_b = models.IntegerField("Pontuação Terceiro Set Equipe B", null=True, blank=True)
+    houve_empate = models.BooleanField("Houve empate?", null=True, blank=True,
+                                       help_text="Preencha se encerrou o tempo da partida com empate. Irá habilitar o placar de desempate.")
+    desempate_a = models.IntegerField("Placar para desempate (por penaltis ou lances livre) -Equipe A", null=True, blank=True)
+    desempate_b = models.IntegerField("Placar para desempate (por penaltis ou lances livre) -Equipe B", null=True, blank=True)
+    encerrada = models.BooleanField("Partida encerrada", default=False)
     vencedora = models.ForeignKey(Equipe, null=True, blank=True, related_name='vitorias',
                                   verbose_name="Equipe vencedora", on_delete=models.SET_NULL)
-    encerrada = models.BooleanField("Partida encerrada", default=False)
 
     def definir_vencedora(self):
         # 🟨 Modalidade SEM placar
         if not self.modalidade.possui_placar:
-
-            # WO define vencedora automaticamente
             if self.houve_wo:
                 if self.equipe_wo_id == self.equipe_a_id:
                     return self.equipe_b
                 elif self.equipe_wo_id == self.equipe_b_id:
                     return self.equipe_a
                 return None
-
-            # Sem WO → vencedora vem do formulário
             return self.vencedora
 
         # 🟦 Modalidade COM placar
@@ -177,6 +226,15 @@ class Partida(models.Model):
                 return self.equipe_a
             return None
 
+        # 🟦 COM placar + empate → usa desempate
+        if self.houve_empate:
+            if self.desempate_a > self.desempate_b:
+                return self.equipe_a
+            elif self.desempate_b > self.desempate_a:
+                return self.equipe_b
+            return None
+
+        # 🟦 placar normal
         if self.placar_a > self.placar_b:
             return self.equipe_a
         elif self.placar_b > self.placar_a:
@@ -249,12 +307,11 @@ class Partida(models.Model):
 
             if self.equipe_a_id == self.equipe_b_id:
                 raise ValidationError(
-                    {"equipe_b": "Equipe A e B não podem ser a mesma."}
-                )
+                    {"equipe_b": "Equipe A e B não podem ser a mesma."}                )
 
-            if self.encerrada and self.houve_wo is True:
-                if self.equipe_wo_id not in (self.equipe_a_id, self.equipe_b_id):
-                    errors['equipe_wo'] = "Escolha a equipe que não compareceu: Equipe A ou Equipe B."
+        if self.houve_wo is True:
+            if self.equipe_wo_id not in (self.equipe_a_id, self.equipe_b_id):
+                errors['equipe_wo'] = "Escolha a equipe que não compareceu: Equipe A ou Equipe B."
 
         modalidade = self.modalidade
 
@@ -267,12 +324,23 @@ class Partida(models.Model):
                         "Informe os dois placares para encerrar a partida."
                     )
 
-            if (
-                    self.placar_a is not None
-                    and self.placar_b is not None
-                    and self.placar_a == self.placar_b
-            ):
-                raise ValidationError("Não pode haver empate.")
+                # empate sem marcar houve_empate → erro
+                if self.placar_a == self.placar_b and not self.houve_empate:
+                    raise ValidationError(
+                        "Empate exige que o campo 'Houve empate?' seja marcado."
+                    )
+
+                # houve empate → exige desempate
+                if self.houve_empate:
+                    if self.desempate_a is None or self.desempate_b is None:
+                        raise ValidationError(
+                            "Informe o placar de desempate para encerrar a partida."
+                        )
+
+                    if self.desempate_a == self.desempate_b:
+                        raise ValidationError(
+                            "O desempate não pode terminar empatado."
+                        )
 
         # 🟨 MODALIDADE SEM PLACAR
         if modalidade and not modalidade.possui_placar:

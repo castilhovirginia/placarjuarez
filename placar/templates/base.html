@@ -1,0 +1,27 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Placar -  Interclasse "Juarez Wanderley"{% block title %}{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/placar/base.css' %}">
+    <!-- CSS EXTRA DAS PÁGINAS -->
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+{% include 'menu.html' %}
+<!-- CONTEÚDO -->
+<body>
+<!-- CONTEÚDO PRINCIPAL -->
+    <main>
+        {% block content %}
+        {% endblock %}
+    </main>
+<footer class="footer">
+    <img
+    src="{{ MEDIA_URL }}campeonato/footer{{ campeonato.ano }}.png"
+    alt="Ranking Geral Interclasse {{ campeonato.ano }}"
+</footer>
+</body>
+</html>

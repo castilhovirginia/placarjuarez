@@ -1,38 +1,43 @@
+{% extends 'base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Placar -  Interclasse "Juarez Wanderley" - Ranking Geral</title>
+
+{% block title %}
+- Ranking geral
+{% endblock %}
+
+
+{% block extra_css %}
     <link rel="stylesheet" href="{% static 'css/placar/ranking.css' %}">
-</head>
-<body>
-{% include 'menu.html' %}
-<!-- HEADER 100% -->
-<header class="header-full">
-    <img src="{% static 'images/placar/ranking-header.png' %}" alt="Ranking Geral Interclasse">
-</header>
+{% endblock %}
+
+{% block content %}
+
 <!-- CONTEÚDO -->
-<main class="ranking-wrapper">
+<div class="header-full">
+    <img
+    src="{{ MEDIA_URL }}campeonato/ranking_geral_header{{ campeonato.ano }}.png"
+    alt="Ranking Geral Interclasse {{ campeonato.ano }}"
+>
+</div>
+    <div class="ranking-wrapper">
     <section class="ranking-grid">
         {% for equipe, pontos in ranking %}
-        <div class="ranking-item {% if item.posicao == 1 %}primeiro{% endif %}">
-            <span class="posicao">{{ forloop.counter }}</span>
-            <span class="nome">
+        <div class="ranking-item {% if forloop.counter == 1 %}primeiro{% endif %}">
+            <span class="posicao">{{ forloop.counter }}
             {% if equipe.logo %}
-    <img
-      src="{{ equipe.logo.url }}"
-      alt="Logo {{ equipe.nome }}"
-      style="height: 40px; vertical-align: middle; margin-right: 8px;"
-    >
-  {% endif %}
-  {{ equipe.nome }}</span>
+                <img
+                  src="{{ equipe.logo.url }}"
+                  alt="Logo {{ equipe.nome }}"
+                  style="height: 60px; vertical-align: middle; margin-right: 8px;"
+                >
+                {% endif %}</span>
+            <span class="nome">
+                {{ equipe.nome }}
+            </span>
             <span class="pontos">{{ pontos }} PTS</span>
         </div>
         {% endfor %}
     </section>
-</main>
+</div>
 
-</body>
-</html>
+{% endblock %}

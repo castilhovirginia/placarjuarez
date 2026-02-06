@@ -40,7 +40,9 @@ def ranking_geral(request, campeonato_id):
     partidas = Partida.objects.filter(
         campeonato=campeonato,
         encerrada=True,
-        fase__in=[Fase.FINAL, Fase.TERCEIRO]
+        fase__in=[Fase.FINAL, Fase.TERCEIRO],
+        equipe_a__ano=campeonato.ano,
+        equipe_b__ano=campeonato.ano
     ).select_related('equipe_a', 'equipe_b', 'vencedora')
 
     for partida in partidas:
@@ -65,7 +67,8 @@ def ranking_geral(request, campeonato_id):
     # 🔹 DANÇA
     dancas = Danca.objects.filter(
         campeonato=campeonato,
-        colocacao__in=[1, 2, 3, 4]
+        colocacao__in=[1, 2, 3, 4],
+        equipe__ano=campeonato.ano
     ).select_related('equipe')
 
     for danca in dancas:
@@ -73,7 +76,8 @@ def ranking_geral(request, campeonato_id):
 
     # 🔹 EXTRAS (doações + / penalidades -)
     extras = Extra.objects.filter(
-        campeonato=campeonato
+        campeonato=campeonato,
+        equipe__ano=campeonato.ano
     ).select_related('equipe')
 
     for extra in extras:
@@ -90,18 +94,11 @@ def ranking_geral(request, campeonato_id):
 
     context = {
         'campeonato': campeonato,
-        'ranking': ranking_ordenado
+        'ranking': ranking_ordenado,
+        'ano_campeonato': campeonato.ano,
     }
 
     return render(request, 'ranking_geral.html', context)
-
-PONTOS_COLOCACAO = {
-    1: 1000,
-    2: 800,
-    3: 600,
-    4: 400,
-}
-
 
 def pontuacao_por_equipe(request, equipe_id):
     equipe = get_object_or_404(Equipe, id=equipe_id)
@@ -111,6 +108,8 @@ def pontuacao_por_equipe(request, equipe_id):
         (Q(equipe_a=equipe) | Q(equipe_b=equipe)),
         encerrada=True  # Apenas partidas que já foram encerradas
     ).select_related('campeonato', 'modalidade').order_by('modalidade', 'data')  # Ordenando por modalidade e data
+
+    ano_campeonato = partidas.first().campeonato.ano if partidas.exists() else None
 
     # Lista para armazenar os resultados de cada partida
     resultados = []
@@ -168,7 +167,8 @@ def pontuacao_por_equipe(request, equipe_id):
         'resultados': resultados,
         'doacoes_pontos': doacoes_pontos,
         'penalidades_pontos': penalidades_pontos,
-        'total_pontos': total_pontos
+        'total_pontos': total_pontos,
+        'ano_campeonato': ano_campeonato,
     }
 
     return render(request, 'pontuacao_por_equipe.html', context)
