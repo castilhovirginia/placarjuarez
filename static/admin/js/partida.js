@@ -234,6 +234,36 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 
+document.addEventListener('DOMContentLoaded', function () {
+    const encerradaCheckbox = document.getElementById('id_encerrada');
+
+    if (!encerradaCheckbox) return;
+
+    // valor original ao carregar o form (edição)
+    let valorAnterior = encerradaCheckbox.checked;
+
+    encerradaCheckbox.addEventListener('change', function () {
+
+        // só entra se houve mudança real
+        if (this.checked !== valorAnterior) {
+
+            const mensagem = this.checked
+                ? "⚠️ Atenção!\n\nAo ENCERRAR a partida, o resultado será enviado para a próxima fase.\n\nVerifique se está tudo correto!"
+                : "⚠️ Atenção!\n\nAo REABRIR a partida, o resultado será removido da próxima fase.\n\nVerifique se é isso que deseja e que está tudo correto antes de salvar!";
+
+            const confirmado = confirm(mensagem);
+
+            if (!confirmado) {
+                // volta ao estado anterior
+                this.checked = valorAnterior;
+                return;
+            }
+
+            valorAnterior = this.checked;
+        }
+    });
+});
+
 
 document.addEventListener('DOMContentLoaded', function () {
     const encerradaCheckbox = document.getElementById('id_encerrada');
@@ -263,4 +293,63 @@ document.addEventListener('DOMContentLoaded', function () {
             valorAnterior = this.checked;
         }
     });
+});
+
+document.addEventListener("DOMContentLoaded", function () {
+    const campeonato = document.getElementById("id_campeonato");
+    const equipeA = document.getElementById("id_equipe_a");
+    const equipeB = document.getElementById("id_equipe_b");
+    const equipeWo = document.getElementById("id_equipe_wo");
+    const equipeVenc = document.getElementById("id_vencedora");
+
+    if (!campeonato) return;
+
+    const endpoint = "/admin/placar/partida/equipes-por-campeonato/";
+
+    function limparSelect(select) {
+        select.innerHTML = '<option value="">---------</option>';
+    }
+
+    function carregarEquipes(campeonatoId) {
+        // ✅ guarda seleção atual (edição)
+        const selecionadaA = equipeA.value;
+        const selecionadaB = equipeB.value;
+        const selecionadaWo = equipeWo.value;
+        const selecionadaVenc = equipeVenc.value;
+
+        limparSelect(equipeA);
+        limparSelect(equipeB);
+        limparSelect(equipeWo);
+        limparSelect(equipeVenc);
+
+
+        if (!campeonatoId) return;
+
+        fetch(`${endpoint}?campeonato_id=${campeonatoId}`)
+            .then(response => response.json())
+            .then(data => {
+                data.forEach(item => {
+                    equipeA.add(new Option(item.text, item.id));
+                    equipeB.add(new Option(item.text, item.id));
+                    equipeWo.add(new Option(item.text, item.id));
+                    equipeVenc.add(new Option(item.text, item.id));
+                });
+
+                // ✅ restaura seleção se existir
+                if (selecionadaA) equipeA.value = selecionadaA;
+                if (selecionadaB) equipeB.value = selecionadaB;
+                if (selecionadaWo) equipeWo.value = selecionadaWo;
+                if (selecionadaVenc) equipeVenc.value = selecionadaVenc;
+            });
+    }
+
+    // mudança de campeonato
+    campeonato.addEventListener("change", function () {
+        carregarEquipes(this.value);
+    });
+
+    // edição: carrega automaticamente
+    if (campeonato.value) {
+        carregarEquipes(campeonato.value);
+    }
 });

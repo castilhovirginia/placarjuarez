@@ -1,5 +1,5 @@
 from django import forms
-from .models import Modalidade, Equipe, Partida, Danca, Extra
+from .models import Modalidade, Equipe, Partida, Danca, Extra, Campeonato
 
 
 class ModalidadeForm(forms.ModelForm):
@@ -81,10 +81,14 @@ class PartidaAdminForm(forms.ModelForm):
             self.fields['equipe_b'].queryset = Equipe.objects.filter(
                 ano=campeonato.ano
             )
+            self.fields['equipe_wo'].queryset = Equipe.objects.filter(
+                ano=campeonato.ano
+            )
         else:
             # enquanto não houver campeonato definido, não mostra ninguém
             self.fields['equipe_a'].queryset = Equipe.objects.none()
             self.fields['equipe_b'].queryset = Equipe.objects.none()
+            self.fields['equipe_wo'].queryset = Equipe.objects.none()
 
         #🧹 Sempre limpar vencedora no formulário (edição)
         if 'vencedora' in self.fields:
